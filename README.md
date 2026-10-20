@@ -23,3 +23,8 @@ flutter pub get
 flutter create --platforms=android --project-name voice_scribe .
 flutter build apk --debug
 ```
+
+## 2026-10-20 增量功能
+- 每筆錄音新增手動逐字稿編輯（存成與音檔對應的 .wav.txt）
+- 可分享匯出 TXT
+- 自動離線 ASR 與自動語者辨識仍未整合；不可將人工逐字稿誤認為 AI 輸出
