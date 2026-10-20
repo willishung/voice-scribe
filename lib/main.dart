@@ -49,6 +49,66 @@ class _RecorderPageState extends State<RecorderPage> {
     if (mounted) setState(() => files = items);
   }
 
+  Future<void> editTranscript(File audio) async {
+    final transcript = File('${audio.path}.txt');
+    final controller = TextEditingController(
+      text: await transcript.exists() ? await transcript.readAsString() : '',
+    );
+    if (!mounted) { controller.dispose(); return; }
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('逐字稿（手動編輯）'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: TextField(
+            controller: controller,
+            minLines: 5,
+            maxLines: 12,
+            decoration: const InputDecoration(
+              hintText: '離線 AI 辨識尚未整合，可先輸入或修改逐字稿。',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              await transcript.writeAsString(controller.text, flush: true);
+              if (dialogContext.mounted) Navigator.pop(dialogContext);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('逐字稿已儲存')),
+                );
+              }
+            },
+            child: const Text('儲存'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+  }
+
+  Future<void> exportTranscript(File audio) async {
+    final transcript = File('${audio.path}.txt');
+    if (!await transcript.exists()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('請先編輯並儲存逐字稿')),
+        );
+      }
+      return;
+    }
+    await SharePlus.instance.share(
+      ShareParams(files: [XFile(transcript.path)]),
+    );
+  }
+
   Future<void> toggle() async {
     try {
       if (recording) {
@@ -95,7 +155,7 @@ class _RecorderPageState extends State<RecorderPage> {
           label: Text(recording ? '停止並儲存' : '開始錄音'),
         ),
         const SizedBox(height: 12),
-        const Text('離線逐字稿及自動語者辨識：尚未整合', style: TextStyle(color: Colors.deepOrange)),
+        const Text('離線 AI 轉錄及自動語者辨識尚未整合；現可手動編輯及匯出 TXT', style: TextStyle(color: Colors.deepOrange)),
         const Divider(height: 36),
         const Align(alignment: Alignment.centerLeft, child: Text('錄音紀錄')),
         Expanded(child: ListView.builder(
@@ -105,11 +165,21 @@ class _RecorderPageState extends State<RecorderPage> {
             return ListTile(
               leading: const Icon(Icons.audiotrack),
               title: Text(f.uri.pathSegments.last),
-              trailing: IconButton(
-                icon: const Icon(Icons.share),
-                onPressed: () async => SharePlus.instance.share(
-                  ShareParams(files: [XFile(f.path)]),
-                ),
+              trailing: PopupMenuButton<String>(
+                onSelected: (action) async {
+                  if (action == 'edit') await editTranscript(f);
+                  if (action == 'txt') await exportTranscript(f);
+                  if (action == 'audio') {
+                    await SharePlus.instance.share(
+                      ShareParams(files: [XFile(f.path)]),
+                    );
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(value: 'edit', child: Text('編輯逐字稿')),
+                  PopupMenuItem(value: 'txt', child: Text('匯出 TXT')),
+                  PopupMenuItem(value: 'audio', child: Text('分享錄音')),
+                ],
               ),
             );
           },
